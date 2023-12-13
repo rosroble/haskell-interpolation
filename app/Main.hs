@@ -1,7 +1,7 @@
 module Main (main) where
 
 import Data.List.Split (splitOn)
-import Interpolation (lagrangeList)
+import Interpolation (lagrangeList, newtonList)
 import Options.Applicative
 import System.IO
 import Text.Read (readMaybe)
@@ -81,34 +81,58 @@ main = execParser opts >>= runWithOptions
             <> header "Linear interpolation"
         )
 
+validMethods :: [String]
+validMethods = ["lagrange", "newton"]
+
+validateMethods :: [String] -> Bool
+validateMethods ms
+  = foldr (\ m -> (&&) (m `elem` validMethods)) True ms
+
+interpolatorFromName :: String -> ([Double] -> [(Double, Double)] -> [(Double, Double)])
+interpolatorFromName name = case name of
+  "newton" -> newtonList
+  "lagrange" -> lagrangeList
+  _ -> error "No such interpolator"
+
 runWithOptions :: Options -> IO ()
 runWithOptions (Options mStep mWindow mMethod) = do
   putStrLn $ "Step: " ++ show mStep
   putStrLn $ "Window: " ++ show mWindow
   putStrLn $ "Method: " ++ show mMethod
-  cliRoutine mStep mWindow [] True
+  if not $ validateMethods mMethod
+    then error "Bad method"
+    else cliRoutine mStep mWindow mMethod [] True
 
-cliRoutine :: Double -> Int -> [(Double, Double)] -> Bool -> IO ()
-cliRoutine step' window' vals instart = do
+cliRoutine :: Double -> Int -> [String] -> [(Double, Double)] -> Bool -> IO ()
+cliRoutine step' window' methods vals instart = do
   maybePoint <- maybeReadPoint
   case maybePoint of
     Just pt -> start $ vals ++ [pt]
     Nothing -> do
-      interpolateInInterval lagrangeList vals (fst $ head vals) (fst $ last vals) step'
+      mapM_ (interpolateInInterval_ vals (fst $ head vals) (fst $ last vals) step') methods
   where
     start :: [(Double, Double)] -> IO ()
     start vals'
-      | length vals' < window' = cliRoutine step' window' vals True
+      | length vals' < window' = cliRoutine step' window' methods vals' True
       | otherwise = do
           let middleX = (fst (head vals') + fst (last vals')) / 2
           if instart
             then do
-              interpolateInInterval lagrangeList vals' (fst $ head vals') (fst $ last vals') step'
+              mapM_ (interpolateInInterval_ vals' (fst $ head vals') (fst $ last vals') step') methods
             else do
-              interpolateInInterval lagrangeList vals' middleX middleX 1
-          cliRoutine step' window' (drop 1 vals') False
+              mapM_ (interpolateInInterval_ vals' middleX middleX 1) methods
+          cliRoutine step' window' methods (drop 1 vals') False
 
-interpolateInInterval :: ([Double] -> [(Double, Double)] -> [(Double, Double)]) -> [(Double, Double)] -> Double -> Double -> Double -> IO ()
-interpolateInInterval interpolateFunc vals fromX toX freq = do
+-- interpolateInInterval :: [String] -> [(Double, Double)] -> Double -> Double -> Double -> IO ()
+-- interpolateInInterval [] _ _ _ _ = return ()
+-- interpolateInInterval (ipol:ipols) vals fromX toX freq = do
+--   let pts = [fromX, (fromX + freq) .. toX]
+--   putStrLn ("Interpolating with: " + ipol)
+--   mapM_ print (interpolatorFromName ipol $ pts vals)
+--   interpolateInInterval ipols vals fromX toX freq
+
+interpolateInInterval_ :: [(Double, Double)] -> Double -> Double -> Double -> String -> IO ()
+interpolateInInterval_ vals fromX toX freq ipol = do
   let pts = [fromX, (fromX + freq) .. toX]
-  mapM_ print (interpolateFunc pts vals)
+  putStrLn ("Interpolating with: " ++ ipol)
+  mapM_ print (interpolatorFromName ipol pts vals)
