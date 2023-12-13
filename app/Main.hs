@@ -85,8 +85,7 @@ validMethods :: [String]
 validMethods = ["lagrange", "newton"]
 
 validateMethods :: [String] -> Bool
-validateMethods ms
-  = foldr (\ m -> (&&) (m `elem` validMethods)) True ms
+validateMethods = foldr (\m -> (&&) (m `elem` validMethods)) True
 
 interpolatorFromName :: String -> ([Double] -> [(Double, Double)] -> [(Double, Double)])
 interpolatorFromName name = case name of
@@ -118,7 +117,7 @@ cliRoutine step' window' methods vals instart = do
           let middleX = (fst (head vals') + fst (last vals')) / 2
           if instart
             then do
-              mapM_ (interpolateInInterval_ vals' (fst $ head vals') ((fst $ last vals') / 2) step') methods
+              mapM_ (interpolateInInterval_ vals' (fst $ head vals') (fst (last vals') / 2) step') methods
             else do
               mapM_ (interpolateInInterval_ vals' middleX middleX 1) methods
           cliRoutine step' window' methods (drop 1 vals') False
