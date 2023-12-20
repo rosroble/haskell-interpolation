@@ -81,6 +81,15 @@ main = execParser opts >>= runWithOptions
             <> header "Linear interpolation"
         )
 
+readPoints :: IO [(Double, Double)]
+readPoints = do
+  maybePoint <- maybeReadPoint
+  case maybePoint of
+    Just pair -> do
+      list <- readPoints
+      return (pair : list)
+    Nothing -> return []
+
 validMethods :: [String]
 validMethods = ["lagrange", "newton"]
 
@@ -100,35 +109,23 @@ runWithOptions (Options mStep mWindow mMethod) = do
   putStrLn $ "Method: " ++ show mMethod
   if not $ validateMethods mMethod
     then error "Bad method"
-    else cliRoutine mStep mWindow mMethod [] True
+    else cliRoutine mStep mWindow mMethod
 
-cliRoutine :: Double -> Int -> [String] -> [(Double, Double)] -> Bool -> IO ()
-cliRoutine step' window' methods vals instart = do
-  maybePoint <- maybeReadPoint
-  case maybePoint of
-    Just pt -> start $ vals ++ [pt]
-    Nothing -> do
-      mapM_ (interpolateInInterval_ vals (fst $ head vals) (fst $ last vals) step') methods
+cliRoutine :: Double -> Int -> [String] -> IO ()
+cliRoutine step' window' methods  = do
+  points <- readPoints
+  let pts = take window' points
+  mapM_ (interpolateInInterval_ pts (fst $ head pts) (fst $ pts !! (window' - 1)) step') methods
+  start points
   where
-    start :: [(Double, Double)] -> IO ()
-    start vals'
-      | length vals' < window' = cliRoutine step' window' methods vals' True
-      | otherwise = do
-          let middleX = (fst (head vals') + fst (last vals')) / 2
-          if instart
-            then do
-              mapM_ (interpolateInInterval_ vals' (fst $ head vals') (fst (last vals') / 2) step') methods
-            else do
-              mapM_ (interpolateInInterval_ vals' middleX middleX 1) methods
-          cliRoutine step' window' methods (drop 1 vals') False
-
--- interpolateInInterval :: [String] -> [(Double, Double)] -> Double -> Double -> Double -> IO ()
--- interpolateInInterval [] _ _ _ _ = return ()
--- interpolateInInterval (ipol:ipols) vals fromX toX freq = do
---   let pts = [fromX, (fromX + freq) .. toX]
---   putStrLn ("Interpolating with: " + ipol)
---   mapM_ print (interpolatorFromName ipol $ pts vals)
---   interpolateInInterval ipols vals fromX toX freq
+    start points' = do
+      let pts = take window' points'
+      if (length pts < window') then do
+        mapM_ (interpolateInInterval_ pts (fst $ head pts) (fst $ last pts) step') methods
+      else do
+          let middleX = (fst (head pts) + fst (pts !! (window' - 1))) / 2
+          mapM_ (interpolateInInterval_ pts middleX middleX 1) methods
+          start (tail points')
 
 interpolateInInterval_ :: [(Double, Double)] -> Double -> Double -> Double -> String -> IO ()
 interpolateInInterval_ vals fromX toX freq ipol = do
