@@ -85,9 +85,7 @@ readPoints :: IO [(Double, Double)]
 readPoints = do
   maybePoint <- maybeReadPoint
   case maybePoint of
-    Just pair -> do
-      list <- readPoints
-      return (pair : list)
+    Just pair -> readPoints >>= (\x -> return (pair : x))
     Nothing -> return []
 
 validMethods :: [String]
@@ -112,7 +110,7 @@ runWithOptions (Options mStep mWindow mMethod) = do
     else cliRoutine mStep mWindow mMethod
 
 cliRoutine :: Double -> Int -> [String] -> IO ()
-cliRoutine step' window' methods  = do
+cliRoutine step' window' methods = do
   points <- readPoints
   let pts = take window' points
   mapM_ (interpolateInInterval_ pts (fst $ head pts) (fst $ pts !! (window' - 1)) step') methods
@@ -120,9 +118,10 @@ cliRoutine step' window' methods  = do
   where
     start points' = do
       let pts = take window' points'
-      if (length pts < window') then do
-        mapM_ (interpolateInInterval_ pts (fst $ head pts) (fst $ last pts) step') methods
-      else do
+      if length pts < window'
+        then do
+          mapM_ (interpolateInInterval_ pts (fst $ head pts) (fst $ last pts) step') methods
+        else do
           let middleX = (fst (head pts) + fst (pts !! (window' - 1))) / 2
           mapM_ (interpolateInInterval_ pts middleX middleX 1) methods
           start (tail points')
